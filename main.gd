@@ -12,8 +12,10 @@ var neighbors := {
 	"Юг": ["Север", "Восток", "Юго-Восток"],
 	"Юго-Восток": ["Восток", "Юг"],
 }
+var ui: CanvasLayer
 var info_label: Label
 var status_label: Label
+var stats_label: Label
 
 var army: ColorRect
 var army_region := "Север"
@@ -21,11 +23,16 @@ var army_selected := false
 var army_strength := MAX_STRENGTH
 var army_alive := true
 
+# Показатели страны
+var treasury := 100
+var support := 50
+var stability := 50
+
 
 func _ready() -> void:
-	# Панель с информацией сверху экрана
-	var ui := CanvasLayer.new()
+	ui = CanvasLayer.new()
 	add_child(ui)
+	# Панель с информацией сверху экрана
 	info_label = Label.new()
 	info_label.position = Vector2(20, 10)
 	info_label.text = "Кликни по региону или по армии"
@@ -34,6 +41,14 @@ func _ready() -> void:
 	status_label = Label.new()
 	status_label.position = Vector2(20, 440)
 	ui.add_child(status_label)
+	# Панель страны справа: кнопки законов и показатели
+	make_button("Повысить налоги", Vector2(560, 100), raise_taxes)
+	make_button("Соцвыплаты", Vector2(560, 150), social_spending)
+	stats_label = Label.new()
+	stats_label.position = Vector2(560, 210)
+	stats_label.custom_minimum_size = Vector2(300, 0)
+	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ui.add_child(stats_label)
 
 	make_region("Север", Vector2(100, 100), Color.STEEL_BLUE)
 	make_region("Восток", Vector2(310, 100), Color.INDIAN_RED)
@@ -41,6 +56,15 @@ func _ready() -> void:
 	make_region("Юго-Восток", Vector2(310, 260), Color.GOLDENROD)
 	make_army()
 	update_status("")
+	update_stats("")
+
+func make_button(text: String, pos: Vector2, callback: Callable) -> void:
+	var b := Button.new()
+	b.text = text
+	b.position = pos
+	b.custom_minimum_size = Vector2(200, 40)
+	b.pressed.connect(callback)
+	ui.add_child(b)
 
 func make_region(region_name: String, pos: Vector2, col: Color) -> void:
 	var r := ColorRect.new()
@@ -80,6 +104,30 @@ func supply_distance(region_name: String) -> int:
 				dist[n] = dist[current] + 1
 				queue.append(n)
 	return dist[region_name]
+
+# ---------- Политика ----------
+
+func raise_taxes() -> void:
+	treasury += 30
+	support = clampi(support - 10, 0, 100)
+	update_stats("Налоги повышены: казна выросла, народ недоволен.")
+
+func social_spending() -> void:
+	if treasury < 20:
+		update_stats("В казне не хватает денег на выплаты.")
+		return
+	treasury -= 20
+	support = clampi(support + 10, 0, 100)
+	update_stats("Выплаты увеличены: народ доволен, казна поредела.")
+
+func update_stats(message: String) -> void:
+	stability = int((support + clampi(treasury, 0, 100)) / 2.0)
+	var text := "СТРАНА\nКазна: %d\nПоддержка народа: %d%%\nСтабильность: %d%%" % [treasury, support, stability]
+	if message != "":
+		text += "\n\n" + message
+	stats_label.text = text
+
+# ---------- Армия ----------
 
 func update_status(extra: String) -> void:
 	var d := supply_distance(army_region)
@@ -133,7 +181,7 @@ func end_turn() -> void:
 	if army_strength == 0:
 		army_alive = false
 		army.color = Color.DIM_GRAY
-		extra = "Армия разбита. Нажми F5 в Godot (перезапуск), чтобы начать заново."
+		extra = "Армия разбита. Закрой окно и нажми F5, чтобы начать заново."
 	update_status(extra)
 
 func select_region(region_name: String) -> void:
